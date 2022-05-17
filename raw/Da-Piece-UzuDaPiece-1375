@@ -1,0 +1,465 @@
+-- Hi Lol
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+game:GetService("Players").LocalPlayer.Idled:Connect(function()
+    game:GetService("VirtualUser"):ClickButton2(Vector2.new())
+end)
+
+local Player = game:GetService("Players").LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TweenService = game:GetService("TweenService")
+
+local SelectedMob = "Bandit Lv. 5"
+local SelectedTool = "Combat"
+local IsChest = false
+local IsFruit = false
+
+local BlacklistedMob = {
+    "Acrobat Pirate Lv. 45",
+    "Corrupt Marine Lv. 50"
+}
+
+function GetMobs()
+	local tbl = {}
+	for i, v in pairs(game:GetService("Workspace").NPC:GetChildren()) do
+		if not table.find(tbl,v.Name) then
+			table.insert(tbl,v.Name)
+		end
+	end
+	table.sort(tbl, function(a,b)
+		return tonumber(a:match("%d+")) < tonumber(b:match("%d+"))
+	end)
+	return tbl
+end
+
+function GetTools()
+	local tbl = {}
+	for i, v in pairs(Player.Backpack:GetChildren()) do
+		if v:IsA("Tool") then
+			table.insert(tbl,v.Name)
+		end
+	end
+    for i, v in pairs(Player.Character:GetChildren()) do
+        if v:IsA("Tool") then
+            table.insert(tbl,v.Name)
+        end
+    end
+	return tbl
+end
+
+function GetLevels()
+	local tbl = {}
+	for i, v in pairs(game:GetService("Workspace").NPC:GetChildren()) do
+		if not table.find(BlacklistedMob,v.Name) and not table.find(tbl,tonumber(v.Name:match("%d+"))) then
+			table.insert(tbl,tonumber(v.Name:match("%d+")))
+		end
+	end
+	return tbl
+end
+
+function GetPlayer()
+    local Playerr = {}
+    for i, v in pairs(game:GetService("Players"):GetPlayers()) do
+        if v ~= Player then
+            table.insert(Playerr,v.Name)
+        end
+    end
+    return Playerr
+end
+
+function GetIsland()
+    local tbl = {}
+    for i, v in pairs(game:GetService("Workspace").IslandSpawns:GetChildren()) do
+        table.insert(tbl,v.Name)
+    end
+    table.sort(tbl)
+    return tbl
+end
+
+local MobLevels = GetLevels()
+
+function ClosestLowLevel()
+    local want = 5
+    for i, v in pairs(MobLevels) do
+        if v <= Player.PlayerStats.Level.Value and want <= v then
+            want = v
+        end
+    end
+    return want
+end
+
+function Click()
+    game:GetService("VirtualUser"):Button1Down(Vector2.new(69, 69))		
+end
+
+function EquipTool()
+	Click()
+	Player.Character.Humanoid:EquipTool(Player.Backpack:FindFirstChild(SelectedTool))
+    if Player.Character:FindFirstChild("Combat") then
+        Player.Character.Combat.CombatClient.Combat:FireServer(false)
+    end
+end
+
+function Teleport(a,y)
+    local plr = Player.Character.HumanoidRootPart
+
+    plr.CFrame = a.CFrame * CFrame.new(0,y,0)
+end
+
+function Stat(a)
+	ReplicatedStorage.Events.UpgradeStat:FireServer(a,1)
+end
+
+function DoQuest()
+	local Quest = ""
+	local Frame = Player.PlayerGui.Menu.QuestFrame
+	local split = SelectedMob:split(" ")
+	for i = 1, #split - 2 do
+		Quest = Quest..split[i]
+	end
+	if Frame.Visible == false then
+	    ReplicatedStorage.Events.Quest:FireServer(Quest.."Quest")
+	elseif Frame.Visible == true and  Player.SelectedQuest.Value ~= Quest.."Quest"  then
+		ReplicatedStorage.Events.Quest:FireServer(Quest.."Quest")
+    end
+end
+
+function IsSomething()
+    if IsChest or IsFruit then
+        return true
+    end
+    return false
+end
+
+function LevelFarm()
+	pcall(function()
+        local Close = ClosestLowLevel()
+        for i, v in pairs(game:GetService("Workspace").NPC:GetChildren()) do
+            if tonumber(v.Name:match("%d+")) == Close and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and _G.LevelFarm and not IsSomething() then
+                SelectedMob = v.Name
+                repeat task.wait()
+                    DoQuest()
+                    Teleport(v.HumanoidRootPart,-5)
+                    EquipTool()
+                until v.Humanoid.Health <= 0 or not _G.LevelFarm
+            end
+        end
+    end)
+end
+
+function AutoFarm()
+	pcall(function()
+        for i, v in pairs(game:GetService("Workspace").NPC:GetChildren()) do
+            if v.Name == SelectedMob and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and _G.AutoFarm and not IsSomething() then
+                repeat task.wait()
+                    DoQuest()
+                    Teleport(v.HumanoidRootPart,-5)
+                    EquipTool()
+                until v.Humanoid.Health <= 0 or not _G.AutoFarm
+            end
+        end
+    end)
+end
+
+function AutoSkill()
+    for i, v in pairs({"Z","X","C","V"}) do
+        VirtualInputManager:SendKeyEvent(true, v, false, game)
+        VirtualInputManager:SendKeyEvent(false, v, false, game)
+        task.wait()
+    end
+end
+
+function AutoHaki()
+    if Player.PlayerGui.Menu.KenLabel.Visible == false then
+        ReplicatedStorage.Events.SkillManager:FireServer("Ken",true)
+    end
+
+    if not Player.Character.LeftHand:FindFirstChild("Buso") then
+        ReplicatedStorage.Events.SkillManager:FireServer("Buso")
+    end
+end
+
+function AutoSpectate()
+    repeat task.wait()
+        pcall(function()
+            game.Workspace.Camera.CameraSubject = game:GetService("Players")[SelectedPlayer].Character.Humanoid        
+        end)
+    until not _G.AutoSpec 
+    game.Workspace.Camera.CameraSubject = Player.Character.Humanoid    
+end
+
+function AutoChest()
+    for i, v in pairs(game:GetService("Workspace").Chests:GetChildren()) do
+        if _G.AutoChest and v.Transparency == 0 then
+            IsChest = true
+            Teleport(v,0)
+            firetouchinterest(v)
+        end
+    end
+    IsChest = false
+end
+
+function GetWorkspaceTool()
+    for i, v in pairs(game.Workspace:GetChildren()) do
+        if v:IsA("Tool") then
+            Player.Character.Humanoid:EquipTool(v)
+        end
+    end
+    for i, v in pairs(Workspace.Fruits:GetDescendants()) do
+        if v:IsA("ClickDetector") then
+            if not table.find({"Apple","Orange","Pineapple"},v.Parent.Name) then
+                IsFruit = true
+                Teleport(v.Parent.Parent.Parent,0)
+                fireclickdetector(v)
+            end
+        end
+    end    
+    IsFruit = false
+end
+
+function NoClip()
+    pcall(function()
+        for i, v in pairs(Player.Character:GetDescendants()) do
+            if v:IsA("BasePart") and v.CanCollide == true then
+                v.CanCollide = false
+            end
+        end
+        --Player.Character.HumanoidRootPart.Velocity = Vector3.new(0,5,0)
+    end)
+end
+
+
+if _G.C1 then _G.C1:Disconnect() end
+_G.C1 = RunService.Stepped:Connect(NoClip)
+
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/uzu01/lua/main/ui/flux.lua"))()
+local w = library:Window("Uzu Scripts", "Da Piece") 
+local HomeTab = w:Tab("Home", 6026568198)
+
+local TimeLabel = HomeTab:Label(game:GetService("Workspace").UpTime.Value)
+
+game:GetService("Workspace").UpTime.Changed:Connect(function()
+    TimeLabel:Change(game:GetService("Workspace").UpTime.Value)
+end)
+
+--[[
+HomeTab:Button("Updates:", "", function()
+    library:Notification("[+] - Auto Farm Boss \n [+] - Auto Get LP", "Thanks")
+end)
+--]]
+
+HomeTab:Line()
+
+HomeTab:Button("Copy Discord Link"," ", function()
+    setclipboard("discord.gg/waAsQFwcBn")
+    library:Notification("discord.gg/waAsQFwcBn", "Alright")
+end)
+
+HomeTab:Button("Script by Uzu"," ", function()
+    setclipboard("Uzu#8575")
+    library:Notification("Uzu#8575", "Alright")
+end)
+
+HomeTab:Line()
+
+HomeTab:Bind("Toggle Gui",Enum.KeyCode.LeftControl, function()
+    library:Close()
+end)
+
+local FarmTab = w:Tab("Farming", 6034287535)
+
+FarmTab:Toggle("Auto Farm Level", "", _G.LevelFarm, function(t)
+	_G.LevelFarm = t
+	
+	task.spawn(function()
+		while task.wait() do
+			if not _G.LevelFarm then break end
+			LevelFarm()
+		end
+	end)
+end)
+
+FarmTab:Toggle("Auto Farm Seleceted Mob", "", _G.AutoFarm, function(t)
+	_G.AutoFarm = t
+	
+	task.spawn(function()
+		while task.wait() do
+			if not _G.AutoFarm then break end
+			AutoFarm()
+		end
+	end)
+end)
+
+FarmTab:Line()
+
+FarmTab:Dropdown("Select Mob", GetMobs(), function(t)
+	SelectedMob = t
+end)
+
+local ToolDrop = FarmTab:Dropdown("Select Tool", GetTools(), function(t)
+	SelectedTool = t
+end)
+
+FarmTab:Button("Refresh Tool", "", function()
+    ToolDrop:Clear()
+
+    for i, v in pairs(GetTools()) do
+        ToolDrop:Add(v)
+    end
+end)
+
+FarmTab:Line()
+
+FarmTab:Toggle("Auto Skill", "", _G.Skill, function(t)
+    _G.Skill = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.Skill then break end
+            pcall(AutoSkill)
+        end
+    end)
+end)
+FarmTab:Toggle("Auto Haki", "", _G.Haki, function(t)
+    _G.Haki = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.Haki then break end
+            pcall(AutoHaki)
+        end
+    end)
+end)
+
+local StatsTab = w:Tab("Stats", 6035078901)
+
+StatsTab:Toggle("Melee", "", _G.Melee, function(t)
+    _G.Melee = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.Melee then break end
+            Stat("Melee")
+        end
+    end)
+end)
+
+StatsTab:Toggle("Defense", "", _G.Defense, function(t)
+    _G.Defense = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.Defense then break end
+            Stat("Defense")
+        end
+    end)
+end)
+
+StatsTab:Toggle("Sword", "", _G.Sword, function(t)
+    _G.Sword = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.Sword then break end
+            Stat("Sword")
+        end
+    end)
+end)
+
+StatsTab:Toggle("Power", "", _G.Power, function(t)
+    _G.Power = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.Power then break end
+            Stat("Power")
+        end
+    end)
+end)
+
+local ShopTab = w:Tab("Shop",6031265987)
+
+for i, v in pairs(game:GetService("Workspace").Connections:GetChildren()) do
+    if v:IsA("Part") and v.Name ~= "Gamepass" then
+        ShopTab:Button(v.Name, "", function()
+            Teleport(v,0)
+        end)
+    end
+end
+
+local TeleTab = w:Tab("Teleports", 8916381379)
+
+for i, v in pairs(GetIsland()) do
+    TeleTab:Button(v, "", function()
+        Teleport(game:GetService("Workspace").IslandSpawns[v],0)
+    end)
+end
+
+local PlayerTab = w:Tab("Player",6023426956)
+
+local PlayerDropdown = PlayerTab:Dropdown("Select Player", GetPlayer(), function(t)
+    SelectedPlayer = t
+end)
+
+PlayerTab:Button("Refresh Player", "", function()
+    PlayerDropdown:Clear()
+
+    for i, v in pairs(GetPlayer()) do
+        PlayerDropdown:Add(v)
+    end
+end)
+
+PlayerTab:Line()
+
+PlayerTab:Toggle("Spectate Player", "", _G.AutoSpec, function(t)
+    _G.AutoSpec = t
+
+    task.spawn(AutoSpectate)
+end)
+
+local MiscTab = w:Tab("Misc", 8916127218)
+
+MiscTab:Toggle("Auto Chest", "", _G.AutoChest, function(t)
+    _G.AutoChest = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoChest then break end
+            pcall(AutoChest)
+        end
+    end)
+end)
+
+MiscTab:Toggle("Auto Get Fruit", "", _G.AutoGetFruit, function(t)
+    _G.AutoGetFruit = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoGetFruit then break end
+            pcall(GetWorkspaceTool)
+        end
+    end)
+end)
+
+MiscTab:Line()
+
+local Util = loadstring(game:HttpGet("https://raw.githubusercontent.com/uzu01/lua/main/ui/stuff.lua"))()
+
+MiscTab:Button("Rejoin", "", function()
+    Util:Rejoin()
+    library:Notification("Rejoining Please Wait", "Alright")
+end)
+
+MiscTab:Button("Serverhop", "", function()
+    Util:Serverhop()
+    library:Notification("Finding Server... \nPlease Wait", "Alright")
+end)
+
+MiscTab:Button("Serverhop Low Server", "", function()
+    Util:ServerhopLow()
+    library:Notification("Finding Server... \nPlease Wait", "Alright")
+end)
+
+--game:GetService("Workspace").VFX

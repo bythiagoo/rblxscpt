@@ -1,0 +1,471 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+_G.AutoMob = false
+_G.AutoBoss = false
+_G.AutoAllBoss = false
+_G.AutoSkill = false
+_G.AntiAgro = false
+
+local Players = game:GetService("Players")
+local ReplicatedStoragee = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+local ArrowPity = Player.PlayerValues.Pity
+local RacePity = Player.PlayerValues.RacePity
+
+local SelectedMob = "Thug (lvl 5)"
+
+Player.Idled:Connect(function()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+function GetMobs()
+    local mob = {}
+    for i, v in pairs(game.Workspace.Live:GetChildren()) do
+        if v:IsA("Model") and v.Name ~= "Training Dummy" and not v:FindFirstChild("Drops") and not table.find(mob,v.Name) then
+            table.insert(mob,v.Name)
+        end
+    end
+    table.sort(mob, function(a,b) return tonumber(a:match("%d+")) < tonumber(b:match("%d+")) end)
+    return mob
+end
+
+function GetBoss()
+    local boss = {}
+    for i, v in pairs(game.Workspace.Live:GetChildren()) do
+        if v:FindFirstChild("Drops") then
+            table.insert(boss,v.Name)
+        end
+    end
+    table.sort(boss, function(a,b) return tonumber(a:match("%d+")) < tonumber(b:match("%d+")) end)
+    return boss
+end
+
+local boss = GetBoss()
+
+function Click()
+    local plr = Player.Character.HumanoidRootPart
+    local Remote = ReplicatedStoragee.RemoteEvents.BladeCombatRemote
+    Remote:FireServer(false,plr.CFrame.p,plr.CFrame)
+end
+
+function EquipTool()
+    if _G.AutoBoss or _G.AutoMob or _G.AutoAllBoss or Kill then
+        Click()
+        wait(.5)
+        for i, v in pairs(Player.Backpack:GetChildren()) do
+            if v:IsA("Tool") and v:FindFirstChild("Experience") then
+                Player.Character.Humanoid:EquipTool(v)
+            end
+        end
+    end
+end
+
+function Teleport(ene)
+    Player.Character.HumanoidRootPart.CFrame = ene.CFrame * CFrame.new(0,0,2)
+end
+
+function BringMobs()
+    local plr = Player.Character.HumanoidRootPart
+
+    for i, v in pairs(game.Workspace.Live:GetChildren()) do
+        if v.Name == SelectedMob and v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") then
+            for i2, v2 in pairs(game:GetService("Workspace").QuestMarkers:GetChildren()) do
+                if v2.Name == v.Quest.Value then
+                    plr.CFrame = v2.CFrame * CFrame.new(0,-100,0)
+                    v.HumanoidRootPart.CFrame = plr.CFrame * CFrame.new(0,0,-2)
+                end
+            end
+        end
+    end
+end
+
+function AutoMob()
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoMob then break end
+            pcall(function()
+                if BringMob then
+                    BringMobs()
+                end
+                local plr = Player.Character.HumanoidRootPart
+                for i, v in pairs(game.Workspace.Live:GetChildren()) do
+                    if v.Name == SelectedMob and v:IsA("Model") and v.Humanoid.Health > 0 then
+                        local QuestFrame = Player.PlayerGui.Menu.QuestFrame
+                        if QuestFrame.Visible == false or QuestFrame.QuestName.Text ~= v.Quest.Value then
+                            ReplicatedStoragee.RemoteEvents.ChangeQuestRemote:FireServer(game:GetService("ReplicatedStorage").Quests[v.Quest.Value])
+                        end
+                        Teleport(v.HumanoidRootPart)
+                        if Kill and v.Humanoid.Health < v.Humanoid.MaxHealth then
+                            v.Humanoid.Health = 0
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+function AutoBoss()
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoBoss then break end
+            pcall(function()
+                local plr = Player.Character.HumanoidRootPart
+
+                for i, v in pairs(game.Workspace.Live:GetChildren()) do
+                    if v.Name == SelectedBoss and v.Humanoid.Health > 0 then
+                        Teleport(v.HumanoidRootPart)
+                        if Kill and v.Humanoid.Health < v.Humanoid.MaxHealth then
+                            v.Humanoid.Health = 0
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+function AutoAllBoss()
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoAllBoss then break end
+            pcall(function()
+                for i, v in pairs(game.Workspace.Live:GetChildren()) do
+                    if table.find(boss,v.Name) and v.Humanoid.Health > 0 then
+                        repeat task.wait(1) 
+                            Player.Character.HumanoidRootPart.CFrame = v.HumanoidRootPart.CFrame * CFrame.new(0,0,2)
+                            if Kill and v.Humanoid.Health < v.Humanoid.MaxHealth then
+                                v.Humanoid.Health = 0
+                            end
+                        until v.Humanoid.Health <= 0 or not _G.AutoAllBoss
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+function Buy(thing)
+    ReplicatedStoragee.RemoteEvents.BuyItemRemote:FireServer(thing)
+end
+
+function Float()
+    local plr = Player.Character.HumanoidRootPart
+    if _G.AutoMob or _G.AutoBoss or _G.AutoAllBoss and not plr:FindFirstChild("BodyVelocity") then
+        local p = Instance.new("BodyVelocity",plr)
+        p.Velocity = Vector3.new(0,0,0)
+    elseif not _G.AutoMob or not _G.AutoBoss or not _G.AutoAllBoss and plr:FindFirstChild("BodyVelocity") then
+        plr.BodyVelocity:Destroy()
+    end
+end
+
+if _G.Connection then _G.Connection:Disconnect() end
+_G.Connection = RunService.Stepped:Connect(function()
+    pcall(function()
+        sethiddenproperty(Player, "SimulationRadius", 9e3)
+        if _G.AntiAgro and Player.Character:FindFirstChild("Player") then
+            Player.Character.Player:Destroy()
+        end
+        Float()
+    end)
+end)
+
+if _G.Connection2 then _G.Connection2:Disconnect() end
+_G.Connection2 = RunService.Stepped:Connect(function()
+    pcall(EquipTool)
+end)
+
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/uzu01/lua/main/ui/flux.lua"))()
+local w = library:Window("Uzu Scripts", "Anime Rifts", Color3.fromRGB(66, 134, 245), Enum.KeyCode.LeftControl)
+
+local HomeTab = w:Tab("Home", 6026568198)
+
+HomeTab:Button("Update:", "", function()
+    library:Notification("Better Autofarm", "Thanks")
+end)
+
+HomeTab:Line()
+
+HomeTab:Button("Discord","", function()
+    setclipboard("discord.gg/waAsQFwcBn")
+    library:Notification("Check your Clipboard", "Alright")
+end)
+
+HomeTab:Button("Script by Uzu","", function()
+    setclipboard("discord.gg/waAsQFwcBn")
+    library:Notification("Check your Clipboard", "Alright")
+end)
+
+HomeTab:Line()
+
+HomeTab:Bind("Toggle Gui",Enum.KeyCode.LeftControl, function()
+    library:Close()
+end)
+
+local FarmingTab = w:Tab("Farming", 6034287535)
+
+FarmingTab:Toggle("Auto Mob", "", false, function(t)
+    _G.AutoMob = t
+
+    AutoMob()
+end)
+
+FarmingTab:Dropdown("Select Mob", GetMobs(), function(v)
+    SelectedMob = v 
+end)
+
+FarmingTab:Toggle("Auto Boss", "", false, function(t)
+    _G.AutoBoss = t
+
+    AutoBoss()
+end)
+
+FarmingTab:Dropdown("Select Boss", GetBoss(), function(t)
+    SelectedBoss = t
+end)
+
+FarmingTab:Toggle("Auto All Boss", "", false, function(t)
+    _G.AutoAllBoss = t
+
+    AutoAllBoss()
+end)
+
+FarmingTab:Line()
+
+FarmingTab:Toggle("Bring Mob", "", false, function(t)
+    BringMob = t
+end)
+
+FarmingTab:Toggle("Insta Kill", "", false, function(t)
+    Kill = t
+end)
+
+FarmingTab:Toggle("Auto Skill", "", false, function(t)
+    _G.AutoSkill = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoSkill then break end
+            for i, v in pairs({"E","C","R","V","X","Y"}) do
+                VirtualInputManager:SendKeyEvent(true, v, false, game)
+                VirtualInputManager:SendKeyEvent(false, v, false, game)
+                task.wait()
+            end
+        end
+    end)
+end)
+
+FarmingTab:Line()
+
+FarmingTab:Toggle("Anti Agro", "Dont use it when doing Auto Boss", false, function(t)
+    _G.AntiAgro = t
+
+    if not _G.AntiAgro then
+        Player.Character:BreakJoints()
+    end
+end)
+
+FarmingTab:Button("Anti Player Kill", "Reset if you want to turn it off", function()
+    local part = game:GetService("Workspace").GameStuff.WarningFromTheFutureGokuBlackTeleporter
+    local plr = Player.Character.HumanoidRootPart
+    plr.CFrame = part.TeleportPart.CFrame
+    wait(2)
+    plr.CFrame = workspace.SpawnLocation.CFrame
+end)
+
+local ShopTab = w:Tab("Shop", 6031265987)
+
+ShopTab:Button("Pity Info", "Click me", function()
+    library:Notification("This is for\n Auto Arrow Pity and Auto Race Pity\n ----\n 1. Use One at a Time\n 2. It will stop if you have 0/100 pity", "Thanks")
+end)
+
+ShopTab:Line()
+
+ShopTab:Toggle("Auto Buy Arrow", "", false, function(t)
+    _G.AutoArrow = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoArrow then break end
+            Buy("Arrow")
+        end
+    end)
+end)
+
+ShopTab:Toggle("Auto Buy Bag", "", false, function(t)
+    _G.AutoArmor = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoArmor then break end
+            Buy("Random Armor")
+        end
+    end)
+end)
+
+ShopTab:Toggle("Auto Buy Heart", "", false, function(t)
+    _G.AutoHeart = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoHeart then break end
+            Buy("Heart")
+        end
+    end)
+end)
+
+ShopTab:Toggle("Auto Buy Spec", "", false, function(t)
+    _G.AutoSpec = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoSpec then break end
+            Buy("Random Specialization")
+        end
+    end)
+end)
+
+ShopTab:Line()
+
+ShopTab:Toggle("Auto Find Lucky/Requiem Arrow", "", false, function(t)
+    _G.AutoFindLuck = t
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.AutoFindLuck then break end
+            Buy("Arrow")   
+            for i, v in pairs(Player.Backpack:GetChildren()) do
+                if v.Name == "Arrow" then
+                    v.Parent = Player.Character
+                    v:Destroy()
+                end
+            end
+        end
+    end)
+end)
+
+ShopTab:Toggle("Auto Arrow Pity", "", false, function(t)
+    _G.AutoArrowPity = t
+
+    task.spawn(function()
+        while wait(.7) do
+            if not _G.AutoArrowPity then break end
+            if ArrowPity.Value > 0 then
+                pcall(function()
+                    Buy("Arrow")
+                    wait()
+                    if Player.Backpack:FindFirstChild("Arrow") then
+                        Player.Character.Humanoid:EquipTool(Player.Backpack.Arrow)
+                    end
+                    wait()
+                    ReplicatedStoragee.RemoteEvents.ItemRemote:FireServer()
+                end)
+            end
+        end
+    end)
+end)
+
+ShopTab:Toggle("Auto Race Pity", "", false, function(t)
+    _G.AutoRacePity = t
+
+    task.spawn(function()
+        while wait(.7) do
+            if not _G.AutoRacePity then break end
+            if RacePity.Value > 0 then
+                pcall(function()
+                    Buy("Heart")
+                    wait()
+                    if Player.Backpack:FindFirstChild("Heart") then
+                        Player.Character.Humanoid:EquipTool(Player.Backpack.Heart)
+                    end
+                    wait()
+                    ReplicatedStoragee.RemoteEvents.ItemRemote:FireServer()
+                end)
+            end
+        end
+    end)
+end)
+
+ShopTab:Line()
+
+ShopTab:Toggle("Auto Delete Common Bag", "", false, function(v)
+    _G.DeleteCommon = v
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.DeleteCommon then break end
+            pcall(function()
+                for i, v in pairs(Player.Backpack:GetChildren()) do 
+                    if v.Name == "Bag" and v.BagPart.Overhead.Rarity.Text == "Common" then
+                        v.Parent = Player.Character
+                        v:Destroy()
+                    end
+                end
+            end)
+        end
+    end)
+end)
+
+ShopTab:Toggle("Auto Delete Rare Bag", "", false, function(v)
+    _G.DeleteRare = v
+
+    task.spawn(function()
+        while task.wait() do
+            if not _G.DeleteRare then break end
+            pcall(function()
+                for i, v in pairs(Player.Backpack:GetChildren()) do 
+                    if v.Name == "Bag" and v.BagPart.Overhead.Rarity.Text == "Rare" then
+                        v.Parent = Player.Character
+                        v:Destroy()
+                    end
+                end
+            end)
+        end
+    end)
+end)
+
+local TeleTab = w:Tab("Telepots", 8916381379)
+
+TeleTab:Button("West City", "", function()
+    Player.Character.HumanoidRootPart.CFrame = workspace.SpawnLocation.CFrame
+end)
+
+for i, v in pairs(game.Workspace.GameStuff:GetChildren()) do
+    if v.Name:match("Teleporter") and v.Name ~= "WestCityTeleporter" then
+        local ssplit = v.Name:split("Teleporter")
+        TeleTab:Button(tostring(ssplit[1]), "", function()
+            Player.Character.HumanoidRootPart.CFrame = v.TeleportPart.CFrame
+        end)
+    end
+end
+
+local MiscTab = w:Tab("Misc", 8916127218)
+
+MiscTab:Button("Disable Effects", "", function()
+    pcall(function() 
+        game.Workspace.Effects:Destroy() 
+    end)
+end)
+
+MiscTab:Line()
+
+local Util = loadstring(game:HttpGet("https://raw.githubusercontent.com/uzu01/lua/main/ui/stuff.lua"))()
+
+MiscTab:Button("Rejoin", "", function()
+    library:Notification("Rejoining Please Wait", "Alright")
+    Util:Rejoin()
+end)
+
+MiscTab:Button("Serverhop", "", function()
+    library:Notification("Finding Server... \nPlease Wait", "Alright")
+    Util:Serverhop()
+end)
+
+MiscTab:Button("Serverhop Low Server", "", function()
+    library:Notification("Finding Server... \nPlease Wait", "Alright")
+    Util:ServerhopLow()
+end)
